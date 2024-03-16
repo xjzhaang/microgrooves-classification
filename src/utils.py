@@ -54,11 +54,11 @@ def create_transforms():
             #     image_threshold=0.1,
             # ),
 
-            NormalizeIntensityd(
-                keys=["image"],
-                # subtrahend=train_mean,
-                # divisor=train_std,
-            ),
+            # NormalizeIntensityd(
+            #     keys=["image"],
+            #     # subtrahend=train_mean,
+            #     # divisor=train_std,
+            # ),
             RandFlipd(
                 keys=["image"],
                 prob=0.7,
@@ -89,7 +89,7 @@ def create_transforms():
             RandShiftIntensityd(
                 keys=["image"],
                 prob=0.4,
-                offsets=0.3,
+                offsets=0.2,
             ),
             RandAdjustContrastd(
                 keys=["image"],
@@ -125,11 +125,11 @@ def create_transforms():
             #     spatial_size=(512, 512),
             #     mode="bilinear",
             # ),
-            NormalizeIntensityd(
-                keys=["image"],
-                # subtrahend=train_mean,
-                # divisor=train_std,
-            ),
+            # NormalizeIntensityd(
+            #     keys=["image"],
+            #     # subtrahend=train_mean,
+            #     # divisor=train_std,
+            # ),
         ]
     )
 

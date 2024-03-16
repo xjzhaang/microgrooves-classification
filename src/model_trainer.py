@@ -155,6 +155,7 @@ class Trainer():
 
             self.optimizer.zero_grad()
             self.scaler.scale(loss_batch).backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
             self.scaler.step(self.optimizer)
             self.scaler.update()
             loss += loss_batch.item()
