@@ -106,7 +106,7 @@ class Trainer():
 
         for epoch in range(self.epochs_run, self.epochs):
             train_loss, lr = self.train_step()
-            if epoch % 3 == 1:
+            if epoch % 2 == 1:
                 test_loss, f1_weighted = self.validation_step()
 
             self.epochs_run += 1
@@ -123,7 +123,7 @@ class Trainer():
             )
             torch.save(state, Path(self.save_path) / "model.pth")
 
-            if epoch % 3 == 1:
+            if epoch % 2 == 1:
                 state = dict(
                     epoch=epoch + 1,
                     model=self.model.state_dict(),
@@ -155,7 +155,7 @@ class Trainer():
 
             self.optimizer.zero_grad()
             self.scaler.scale(loss_batch).backward()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+            #torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
             self.scaler.step(self.optimizer)
             self.scaler.update()
             loss += loss_batch.item()

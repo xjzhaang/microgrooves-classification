@@ -1,6 +1,6 @@
 import torch
 from monai.data import ThreadDataLoader
-from monai.networks.nets import EfficientNetBN
+from monai.networks.nets import EfficientNetBN, EfficientNetBNFeatures
 from torch.utils.tensorboard import SummaryWriter
 from collections import Counter
 from src.optimizers import CosineAnnealingLRWarmup, StepLRWarmup
@@ -9,10 +9,11 @@ from src.utils import create_transforms, compute_mean_std
 from src.model_trainer import Trainer
 from datetime import datetime
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
+import fnmatch
 
 
 EXPERIMENT="cancer_multiclass"
-EPOCH=205
+EPOCH=50
 LOG_DIR = f"{EXPERIMENT}_{EPOCH}"
 SAVE_PATH = f"experiments/{EXPERIMENT}/models"
 #EXP_IDS = [211014, 220125, 220308, 220525]
@@ -55,9 +56,17 @@ print("Weights:", weights)
 NUM_CLASSES = len(label_counts)
 
 model = EfficientNetBN("efficientnet-b6", pretrained=True, progress=True, spatial_dims=2, in_channels=1, num_classes=NUM_CLASSES)
+pattern = "_blocks.0.*"
+pattern1 = "_blocks.1.*"
+pattern2 = "_blocks.2.*"
+pattern3 = "_blocks.3.*"
+for name, param in model.named_parameters():
+    if fnmatch.fnmatch(name, pattern) or fnmatch.fnmatch(name, pattern1) or fnmatch.fnmatch(name, pattern2) or fnmatch.fnmatch(name, pattern3):
+        param.requires_grad = False
+model._fc = torch.nn.Linear(in_features=2304, out_features=NUM_CLASSES, bias=True)
+
 optimizer = torch.optim.AdamW(model.parameters(), 1e-4, eps=1e-05)
-#scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH, T_warmup=10)
-scheduler = StepLRWarmup(optimizer, T_max=EPOCH, T_warmup=5)
+scheduler = StepLRWarmup(optimizer, T_max=EPOCH, T_warmup=10)
 scaler = torch.cuda.amp.GradScaler()
 
 writer = SummaryWriter(log_dir=f"runs/{LOG_DIR}_{EXP_IDS}")

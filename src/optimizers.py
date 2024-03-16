@@ -40,18 +40,19 @@ def _step_decay_warmup(iteration, warmup_iterations, step_size, gamma):
     """
     Linear warmup from 0 --> 1.0, then constant, followed by step decay
     """
-    if iteration <= warmup_iterations:
-        multiplier = iteration / warmup_iterations
-    else:
-        multiplier = 1.0
+    # if iteration <= warmup_iterations:
+    #     multiplier = iteration / warmup_iterations
+    # else:
+    multiplier = 1.0
     return multiplier * gamma ** (iteration // step_size)
 
-def StepLRWarmup(optimizer, T_max=500, gamma=0.5, T_warmup=10):
+def StepLRWarmup(optimizer, T_max=100, gamma=0.1, T_warmup=10):
     _decay_func = functools.partial(
         _step_decay_warmup,
         warmup_iterations=T_warmup,
-        step_size=T_max//4,
+        step_size=T_max//2,
         gamma=gamma
     )
+
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, _decay_func)
     return scheduler
