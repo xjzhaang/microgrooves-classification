@@ -19,7 +19,6 @@ def compute_mean_std(dataset):
         image = dataset[i]["image"]
         mean += torch.mean(image)
         std += torch.std(image)
-
     mean /= len(dataset)
     std /= len(dataset)
 
@@ -30,7 +29,7 @@ def compute_mean_std(dataset):
     return mean, std
 
 
-def create_transforms():
+def create_transforms(mean, std):
     train_transforms = Compose(
         [
             Resized(
@@ -54,11 +53,11 @@ def create_transforms():
             #     image_threshold=0.1,
             # ),
 
-            # NormalizeIntensityd(
-            #     keys=["image"],
-            #     # subtrahend=train_mean,
-            #     # divisor=train_std,
-            # ),
+            NormalizeIntensityd(
+                keys=["image"],
+                subtrahend=mean,
+                divisor=std,
+            ),
             RandFlipd(
                 keys=["image"],
                 prob=0.7,
@@ -108,8 +107,8 @@ def create_transforms():
             ),
             NormalizeIntensityd(
                 keys=["image"],
-                # subtrahend=train_mean,
-                # divisor=train_std,
+                subtrahend=mean,
+                divisor=std,
             ),
         ]
     )

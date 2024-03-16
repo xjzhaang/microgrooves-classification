@@ -3,16 +3,16 @@ from monai.data import ThreadDataLoader
 from monai.networks.nets import EfficientNetBN
 from torch.utils.tensorboard import SummaryWriter
 from collections import Counter
-from src.optimizers import CosineAnnealingLRWarmup
+from src.optimizers import CosineAnnealingLRWarmup, StepLRWarmup
 from src.dataset import MyoblastDataset
-from src.utils import create_transforms
+from src.utils import create_transforms, compute_mean_std
 from src.model_trainer import Trainer
 from datetime import datetime
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
 
 
 EXPERIMENT="cancer_multiclass"
-EPOCH=210
+EPOCH=205
 LOG_DIR = f"{EXPERIMENT}_{EPOCH}"
 SAVE_PATH = f"experiments/{EXPERIMENT}/models"
 #EXP_IDS = [211014, 220125, 220308, 220525]
@@ -20,13 +20,20 @@ EXP_IDS = [220429, 220506]
 EXP_IDS_VAL = [220508]
 # EXP_IDS = [240215]
 # EXP_IDS_VAL = [240219]
-train_transforms, val_transforms, test_transforms = create_transforms()
+ds_dataset = MyoblastDataset(cell_type="cancer", exp_ids=EXP_IDS, mode="cropped", transform=None)
+mean, std = compute_mean_std(ds_dataset)
+
+print(f"Mean: {mean} | Std: {std}")
+train_transforms, val_transforms, test_transforms = create_transforms(mean, std)
 train_dataset = MyoblastDataset(cell_type="cancer", exp_ids=EXP_IDS, mode="cropped", transform=train_transforms)
 val_dataset = MyoblastDataset(cell_type="cancer", exp_ids=EXP_IDS_VAL, mode="cropped", transform=val_transforms)
 # train_dataset = MyoblastDataset(cell_type="cancer", exp_ids=EXP_IDS, mode="train", transform=train_transforms)
 # val_dataset = MyoblastDataset(cell_type="cancer", exp_ids=EXP_IDS, mode="val", transform=val_transforms)
-train_loader = ThreadDataLoader(train_dataset, num_workers=4, batch_size=24, shuffle=True)
+train_loader = ThreadDataLoader(train_dataset, num_workers=4, batch_size=16, shuffle=True)
 val_loader = ThreadDataLoader(val_dataset, num_workers=4, batch_size=8, shuffle=True)
+
+# Example usage:
+
 
 labels = [sample['label'].item() for sample in train_dataset]
 label_counts = Counter(labels)
@@ -47,9 +54,10 @@ print("Weights:", weights)
 
 NUM_CLASSES = len(label_counts)
 
-model = EfficientNetBN("efficientnet-b5", pretrained=False, progress=False, spatial_dims=2, in_channels=1, num_classes=NUM_CLASSES)
-optimizer = torch.optim.AdamW(model.parameters(), 1e-3, eps=1e-05)
-scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH, T_warmup=10)
+model = EfficientNetBN("efficientnet-b6", pretrained=True, progress=True, spatial_dims=2, in_channels=1, num_classes=NUM_CLASSES)
+optimizer = torch.optim.AdamW(model.parameters(), 1e-4, eps=1e-05)
+#scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH, T_warmup=10)
+scheduler = StepLRWarmup(optimizer, T_max=EPOCH, T_warmup=5)
 scaler = torch.cuda.amp.GradScaler()
 
 writer = SummaryWriter(log_dir=f"runs/{LOG_DIR}_{EXP_IDS}")
@@ -60,3 +68,4 @@ trainer = Trainer(train_loader, val_loader, model, optimizer, scheduler, scaler,
 
 trainer.train()
 writer.close()
+
