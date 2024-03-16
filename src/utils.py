@@ -1,5 +1,5 @@
 import torch
-from monai.transforms import Compose, RandRotated, RandRotate90d, Resized, RandZoomd, RandAdjustContrastd, RandCropByPosNegLabeld, NormalizeIntensityd, RandFlipd
+from monai.transforms import Compose, RandRotated, RandRotate90d, Resized, RandZoomd, RandAdjustContrastd, RandCropByPosNegLabeld, NormalizeIntensityd, RandFlipd, RandShiftIntensityd
 
 
 def compute_mean_std(dataset):
@@ -86,9 +86,14 @@ def create_transforms():
                 max_zoom=1.1,
                 prob=0.3,
             ),
+            RandShiftIntensityd(
+                keys=["image"],
+                prob=0.4,
+                offsets=0.3,
+            ),
             RandAdjustContrastd(
                 keys=["image"],
-                prob=0.2,
+                prob=0.4,
                 gamma=(0.5, 3),
             )
         ]

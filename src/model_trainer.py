@@ -32,8 +32,8 @@ def sliding_window_inferencer(image, model, patch_size=(1000, 1000), overlap=0.7
     overlap_pixels_x = int(patch_size[1] * overlap)
 
     # Initialize empty classification tensor
-    classification_tensor = torch.zeros(1, num_classes, dtype=torch.float32, device="cuda")
-
+    #classification_tensor = torch.zeros(1, num_classes, dtype=torch.float32, device="cuda")
+    classification_tensor = torch.full((1, num_classes), -999, dtype=torch.float32, device="cuda")
     # Initialize a counter tensor to keep track of the number of predictions per pixel
     counter_tensor = 0
 
@@ -47,13 +47,13 @@ def sliding_window_inferencer(image, model, patch_size=(1000, 1000), overlap=0.7
             with torch.cuda.amp.autocast():
                 classification = model(patch)
             # Update the classification tensor
-            classification_tensor += classification
+            classification_tensor = torch.max(classification_tensor, classification)
 
             # Update the counter tensor
-            counter_tensor += 1
+    #         counter_tensor += 1
 
-    # Divide the classification tensor by the number of overlapping patches
-    classification_tensor /= counter_tensor
+    # # Divide the classification tensor by the number of overlapping patches
+    # classification_tensor /= counter_tensor
 
     return classification_tensor
 
@@ -68,7 +68,7 @@ class Wrapper:
 
 
 class Trainer():
-    def __init__(self, train_loader, val_loader, model, optimizer, scheduler, scaler, loss_fn, num_classes,
+    def __init__(self, train_loader, val_loader, model, optimizer, scheduler, scaler, loss_fn, loss_fn_val, num_classes,
                  device, save_path, writer, epochs):
         self.dataloader_train = train_loader
         self.dataloader_val = val_loader
@@ -87,6 +87,7 @@ class Trainer():
         self.scaler = scaler
         self.save_path = save_path
         self.num_classes = num_classes
+        self.loss_fn_val = loss_fn_val.to(self.device)
         self.auc_metric = ROCAUCMetric(average="weighted")
 
         if (Path(self.save_path) / "model.pth").exists():
@@ -136,9 +137,9 @@ class Trainer():
                 if self.best_loss >= test_loss:
                     self.best_loss = test_loss
                     torch.save(state, Path(self.save_path) / f"best_loss.pth")
-                elif self.best_f1 <= f1_weighted:
-                    self.best_f1 = f1_weighted
-                    torch.save(state, Path(self.save_path) / f"best_f1.pth")
+                # elif self.best_f1 <= f1_weighted:
+                #     self.best_f1 = f1_weighted
+                #     torch.save(state, Path(self.save_path) / f"best_f1.pth")
 
     def train_step(self):
         loss = 0
@@ -182,7 +183,7 @@ class Trainer():
                 X, y = data["image"].to(self.device).to(torch.float32), data["label"].to(self.device)
                 with torch.cuda.amp.autocast():
                     y_pred = self.model(X)
-                    loss_batch = self.loss_function(y_pred, y)  # Convert y to float for BCELoss
+                    loss_batch = self.loss_fn_val(y_pred, y)  # Convert y to float for BCELoss
                 loss += loss_batch.item()
 
                 y_pred_agg = torch.cat([y_pred_agg, y_pred], dim=0)

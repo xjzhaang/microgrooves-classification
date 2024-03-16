@@ -29,7 +29,10 @@ class MyoblastDataset(Dataset):
                 self.data = self.data[self.data['original ID'].isin(train_ids['original ID'])]
             else:
                 self.data = self.data[self.data['original ID'].isin(val_ids['original ID'])]
-        else:
+        elif self.mode == "cropped":
+            self.data_csv = pd.read_csv("data/" + self.cell_type + "/data_cropped.csv")
+            self.data = self.data_csv[self.data_csv["Exp ID"].isin(self.exp_ids)]
+        elif self.mode == "test":
             self.data_csv = pd.read_csv("data/" + self.cell_type + "/data.csv")
             self.data = self.data_csv[self.data_csv["Exp ID"].isin(self.exp_ids)]
             # self.data = self.data[self.data["class"].isin([1, 2, 3, 4])]
