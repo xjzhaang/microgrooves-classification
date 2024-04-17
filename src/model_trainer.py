@@ -137,9 +137,9 @@ class Trainer():
                 if self.best_loss >= test_loss:
                     self.best_loss = test_loss
                     torch.save(state, Path(self.save_path) / f"best_loss.pth")
-                # elif self.best_f1 <= f1_weighted:
-                #     self.best_f1 = f1_weighted
-                #     torch.save(state, Path(self.save_path) / f"best_f1.pth")
+                elif self.best_f1 <= f1_weighted:
+                    self.best_f1 = f1_weighted
+                    torch.save(state, Path(self.save_path) / f"best_f1.pth")
 
     def train_step(self):
         loss = 0

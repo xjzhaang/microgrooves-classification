@@ -42,15 +42,16 @@ def _step_decay_warmup(iteration, warmup_iterations, step_size, gamma):
     """
     if iteration <= warmup_iterations:
         multiplier = iteration / warmup_iterations
+        return multiplier * gamma ** (iteration // step_size)
     else:
         multiplier = 1.0
-    return multiplier * gamma ** (iteration // step_size)
+    return multiplier * gamma ** ((iteration - warmup_iterations) // step_size)
 
 def StepLRWarmup(optimizer, T_max=100, gamma=0.1, T_warmup=10):
     _decay_func = functools.partial(
         _step_decay_warmup,
         warmup_iterations=T_warmup,
-        step_size=T_max//2,
+        step_size=80,
         gamma=gamma
     )
 
