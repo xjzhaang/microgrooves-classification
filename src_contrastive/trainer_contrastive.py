@@ -1,6 +1,6 @@
 import torch
 from pathlib import Path
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 class Trainer():
     def __init__(self, train_loader, model, optimizer, scheduler, scaler, loss_fn,
@@ -17,6 +17,7 @@ class Trainer():
         self.train_loss_ls = []
         self.scaler = scaler
         self.save_path = save_path
+        self.best_loss = 999
 
         if (Path(self.save_path) / "model.pth").exists():
             # Load the checkpoint files
@@ -26,12 +27,27 @@ class Trainer():
             self.scheduler.load_state_dict(checkpoint['scheduler'])
             self.epochs_run = checkpoint['epochs_run']
             self.scaler.load_state_dict(checkpoint['scaler'])
+
     def train(self):
         Path(self.save_path).mkdir(parents=True, exist_ok=True)
 
         for epoch in range(self.epochs_run, self.epochs):
-            train_loss, lr = self.train_step()
+            loss, lr = self.train_step()
             self.epochs_run += 1
+
+            if epoch % 2 == 1:
+                state = dict(
+                    epoch=epoch + 1,
+                    model=self.model.state_dict(),
+                    optimizer=self.optimizer.state_dict(),
+                    epochs_run=self.epochs_run,
+                    scheduler=self.scheduler.state_dict(),
+                    scaler=self.scaler.state_dict(),
+                    loss=min(self.best_loss, loss),
+                )
+                if self.best_loss >= loss:
+                    self.best_loss = loss
+                    torch.save(state, Path(self.save_path) / f"best_loss.pth")
 
             state = dict(
                 epoch=epoch + 1,
@@ -40,12 +56,14 @@ class Trainer():
                 epochs_run=self.epochs_run,
                 scheduler=self.scheduler.state_dict(),
                 scaler=self.scaler.state_dict(),
+                loss=self.best_loss,
             )
             torch.save(state, Path(self.save_path) / "model.pth")
 
-    def train_step(self):
+    def train_step(self, accumulation_steps=16):
         loss = 0
         self.model.train()
+        self.optimizer.zero_grad()
         progress_bar = tqdm(enumerate(self.dataloader_train), total=len(self.dataloader_train),
                             desc=f"Epoch #{self.epochs_run}")
         for batch, data in progress_bar:
@@ -53,13 +71,15 @@ class Trainer():
             with torch.cuda.amp.autocast():
                 z0 = self.model(view0)
                 z1 = self.model(view1)
-                loss_batch = self.loss_function(z0, z1)
+                loss_batch = self.loss_function(z0, z1) / accumulation_steps
 
-            self.optimizer.zero_grad()
             self.scaler.scale(loss_batch).backward()
-            self.scaler.step(self.optimizer)
-            self.scaler.update()
-            loss += loss_batch.item()
+            loss += loss_batch.item() * accumulation_steps  # Adjust for reporting actual loss
+            if (batch + 1) % accumulation_steps == 0:
+                self.scaler.step(self.optimizer)
+                self.scaler.update()
+                self.optimizer.zero_grad()
+
             lr = self.scheduler.get_last_lr()[0]
 
             progress_bar.set_postfix_str(

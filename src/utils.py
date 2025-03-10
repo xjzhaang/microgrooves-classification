@@ -1,33 +1,9 @@
 import torch
 import numpy as np
-from monai.transforms import Compose, RandRotated, RandRotate90d, Resized, RandZoomd, RandAdjustContrastd, RandCropByPosNegLabeld, NormalizeIntensityd, RandFlipd, RandShiftIntensityd
-
-# def compute_mean_std(dataset):
-#     """
-#     Compute the mean and standard deviation for a given dataset.
-
-#     Args:
-#     - dataset: PyTorch dataset containing images
-
-#     Returns:
-#     - mean: Mean value of the dataset
-#     - std: Standard deviation of the dataset
-#     """
-#     mean = torch.zeros(1)
-#     std = torch.zeros(1)
-#     for i in range(len(dataset)):
-#         image = dataset[i]["image"]
-#         mean += torch.mean(image)
-#         std += torch.std(image)
-#     mean /= len(dataset)
-#     std /= len(dataset)
-
-#     # Convert to numpy arrays for easier handling
-#     mean = mean.numpy()
-#     std = std.numpy()
-
-#     return mean, std
-
+from monai.transforms import Compose, RandRotated, RandRotate90d, Resized, RandZoomd, RandAdjustContrastd, RandCropByPosNegLabeld, NormalizeIntensityd, RandFlipd, RandShiftIntensityd, RandGaussianNoised, RandHistogramShiftd, ScaleIntensityRanged
+from monai.transforms import CutMixd
+from monai.utils import set_determinism
+from src.custom_transforms import ThresholdMaskingd, CropAndStackTransformd, MIPTransformd
 
 def compute_mean_std(dataset):
     """
@@ -75,56 +51,63 @@ def create_transforms(mean, std):
     train_transforms = Compose(
         [
             Resized(
-                keys=["image"],
+                keys=["image", "mask"],
                 spatial_size=(512, 512),
                 mode="bilinear",
             ),
-            NormalizeIntensityd(
-                keys=["image"],
-                # subtrahend=mean,
-                # divisor=std,
-                channel_wise=True,
-            ),
+            
+            # MIPTransformd(
+            #     keys=["image"],
+            # ),
             RandFlipd(
-                keys=["image"],
-                prob=0.5,
+                keys=["image", "mask"],
+                prob=0.7,
                 spatial_axis=1,
             ),
             RandFlipd(
-                keys=["image"],
-                prob=0.5,
+                keys=["image", "mask"],
+                prob=0.7,
                 spatial_axis=0,
             ),
+            RandRotate90d(
+                keys=["image", "mask"],
+                prob=0.7,
+                max_k=3,
+            ),
             RandRotated(
-                keys=["image"],
+                keys=["image", "mask"],
                 range_x=3.14,
                 prob=1,
                 padding_mode="zeros",
             ),
-            RandRotate90d(
-                keys=["image"],
-                prob=0.5,
-                max_k=3,
-            ),
-            RandZoomd(
-                keys=["image"],
-                min_zoom=0.9,
-                max_zoom=1.1,
-                prob=0.3,
-            ),
-            RandShiftIntensityd(
-                keys=["image"],
-                prob=0.2,
-                offsets=0.2,
-            ),
+            # RandZoomd(
+            #     keys=["image", "mask"],
+            #     min_zoom=0.9,
+            #     max_zoom=1.1,
+            #     prob=0.3,
+            # ),
+            # RandShiftIntensityd(
+            #     keys=["image"],
+            #     prob=0.3,
+            #     offsets=0.1,
+            # ),
             RandAdjustContrastd(
                 keys=["image"],
-                prob=0.2,
-                gamma=(0.5, 3),
-            )
+                prob=0.4,
+                gamma=(1.7, 2.4),
+            ),
+            # NormalizeIntensityd(
+            #     keys=["image"],
+            #     # subtrahend=mean,
+            #     # divisor=std,
+            #     #nonzero=True,
+            #     channel_wise=True,
+            # ),
+            # ThresholdMaskingd(
+            #     keys=["image"],
+            # ),
         ]
     )
-
     val_transforms = Compose(
         [
             Resized(
@@ -132,12 +115,29 @@ def create_transforms(mean, std):
                 spatial_size=(512, 512),
                 mode="bilinear",
             ),
-            NormalizeIntensityd(
-                keys=["image"],
-                # subtrahend=mean,
-                # divisor=std,
-                channel_wise=True,
-            ),
+            # MIPTransformd(
+            #     keys=["image"],
+            # ),
+            # RandShiftIntensityd(
+            #     keys=["image"],
+            #     prob=0.5,
+            #     offsets=0.1,
+            # ),
+            # RandAdjustContrastd(
+            #     keys=["image"],
+            #     prob=1,
+            #     gamma=(1.7, 2.4),
+            # ),
+            # NormalizeIntensityd(
+            #     keys=["image"],
+            #     # subtrahend=mean,
+            #     # divisor=std,
+            #     #nonzero=True,
+            #     channel_wise=True,
+            # ),
+            # ThresholdMaskingd(
+            #     keys=["image"],
+            # ),
         ]
     )
     test_transforms = Compose(
@@ -147,18 +147,29 @@ def create_transforms(mean, std):
                 spatial_size=(1024, 1024),
                 mode="bilinear",
             ),
-            # Resized(
+            # NormalizeIntensityd(
             #     keys=["image"],
-            #     spatial_size=(512, 512),
-            #     mode="bilinear",
+            #     # subtrahend=mean,
+            #     # divisor=std,
+            #     #nonzero=True,
+            #     channel_wise=True,
             # ),
-            NormalizeIntensityd(
-                keys=["image"],
-                # subtrahend=mean,
-                # divisor=std,
-                channel_wise=True,
-            ),
+            # ScaleIntensityRanged(
+            #     keys=["image"],
+            #     b_min=0,
+            #     b_max=1,
+            # ),
+            # ThresholdMaskingd(
+            #     keys=["image"],
+            # ),
         ]
     )
-
+    val_transforms.set_random_state(seed=0)
     return train_transforms, val_transforms, test_transforms
+
+def set_deterministic_mode(seed=0):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False

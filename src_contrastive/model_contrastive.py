@@ -7,8 +7,8 @@ class SimCLR(torch.nn.Module):
         super().__init__()
         self.backbone = backbone
         self.projection_head = heads.SimCLRProjectionHead(
-            input_dim=512,  # Resnet18 features have 512 dimensions.
-            hidden_dim=512,
+            input_dim=2048,  # Resnet18 features have 512 dimensions.
+            hidden_dim=2048,
             output_dim=128,
         )
 
