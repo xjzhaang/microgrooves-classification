@@ -1,6 +1,8 @@
 import torch
 import torchvision
 from lightly import loss as lightlyloss
+import argparse
+import os
 
 from torch.utils.data import DataLoader
 from lightly.transforms.multi_view_transform import MultiViewTransform
@@ -18,21 +20,55 @@ from src_contrastive.model_contrastive import SimCLR
 from src_contrastive.trainer_contrastive import Trainer
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='SimCLR Training with Fold Selection')
 
-EXPERIMENT="laminac_fibroblast_scaled"
-EPOCH=200
-EXP_IDS = [240215, 240219, 240805, 240807,]
-EXP_IDS_VAL = [240221, 240731, 240802]
-# EXP_IDS = [240221, 240219, 240731, 240802,]
-# EXP_IDS_VAL = [240215, 240805, 240807]
+    # Training parameters
+    parser.add_argument('--experiment', type=str, default='laminac_fibroblast_scaled',
+                        help='Experiment name')
+    parser.add_argument('--epochs', type=int, default=200,
+                        help='Number of training epochs')
+    parser.add_argument('--batch_size', type=int, default=16,
+                        help='Batch size for training')
+    parser.add_argument('--lr', type=float, default=0.001,
+                        help='Learning rate')
+    parser.add_argument('--temperature', type=float, default=0.1,
+                        help='Temperature parameter for NTXentLoss')
+
+    # Fold selection
+    parser.add_argument('--fold', type=int, default=1, choices=[1, 2, 3],
+                        help='Fold number for train/val split (1, 2, or 3)')
+
+    # Model selection
+    parser.add_argument('--backbone', type=str, default='resnet50', choices=['resnet34', 'resnet50'],
+                        help='Backbone architecture')
+
+    # Other parameters
+    parser.add_argument('--log_dir', type=str, default='pretrain/runs',
+                        help='Directory for tensorboard logs')
+    parser.add_argument('--save_dir', type=str, default='pretrain',
+                        help='Directory to save models')
+    parser.add_argument('--num_workers', type=int, default=4,
+                        help='Number of data loading workers')
+
+    return parser.parse_args()
 
 
-LOG_DIR = f"{EXPERIMENT}_{EXP_IDS}_{EPOCH}"
-SAVE_PATH = f"pretrain/{EXPERIMENT}/{EXP_IDS}_{EPOCH}"
-
-ds_dataset = MyoblastDataset(cell_type=EXPERIMENT, exp_ids=EXP_IDS, mode="cropped", transform=None)
-mean, std = compute_mean_std(ds_dataset)
-print(mean, std)
+# Predefined fold configurations
+FOLD_CONFIGS = {
+    1: {
+        'train': [240215, 240219, 240805, 240807],
+        'val': [240221, 240731, 240802]
+    },
+    2: {
+        'train': [240221, 240219, 240731, 240802],
+        'val': [240215, 240805, 240807]
+    },
+    3: {
+        'train': [240215, 240221, 240731, 240807],
+        'val': [240219, 240802, 240805]
+    }
+}
 
 
 class RandomSolarize(torch.nn.Module):
@@ -76,61 +112,123 @@ class RandomIntensityAdjust(torch.nn.Module):
         return img
 
 
-# Expanded transform pipeline
-view_transform = torchvision.transforms.Compose([
-    # Original transforms
-    torchvision.transforms.Resize(size=512, interpolation=InterpolationMode.BILINEAR, antialias=True),
-    # Modified with wider scale range as per SimCLR paper
-    torchvision.transforms.RandomResizedCrop(size=512, scale=(0.8, 1.0)),
-    torchvision.transforms.RandomHorizontalFlip(p=0.7),
-    torchvision.transforms.RandomVerticalFlip(p=0.7),
-    torchvision.transforms.RandomRotation((-180, 180), interpolation=InterpolationMode.BILINEAR, expand=False,
-                                          center=None, fill=0),
+def get_transform():
+    # Expanded transform pipeline
+    view_transform = torchvision.transforms.Compose([
+        # Original transforms
+        torchvision.transforms.Resize(size=512, interpolation=InterpolationMode.BILINEAR, antialias=True),
+        # Modified with wider scale range as per SimCLR paper
+        torchvision.transforms.RandomResizedCrop(size=512, scale=(0.8, 1.0)),
+        torchvision.transforms.RandomHorizontalFlip(p=0.7),
+        torchvision.transforms.RandomVerticalFlip(p=0.7),
+        torchvision.transforms.RandomRotation((-180, 180), interpolation=InterpolationMode.BILINEAR, expand=False,
+                                              center=None, fill=0),
 
-    # Added: Random affine for subtle distortions
-    torchvision.transforms.RandomApply([
-        torchvision.transforms.RandomAffine(
-            degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=5
-        )
-    ], p=0.3),
+        # Added: Random affine for subtle distortions
+        torchvision.transforms.RandomApply([
+            torchvision.transforms.RandomAffine(
+                degrees=0, translate=(0.1, 0.1), scale=(0.9, 1.1), shear=5
+            )
+        ], p=0.3),
 
-    # Modified: Apply Gaussian blur randomly instead of always
-    torchvision.transforms.RandomApply([
-        torchvision.transforms.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))
-    ], p=0.5),
+        # Modified: Apply Gaussian blur randomly instead of always
+        torchvision.transforms.RandomApply([
+            torchvision.transforms.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))
+        ], p=0.5),
 
-    # Added: Color/intensity transforms
-    # torchvision.transforms.RandomApply([
-    #     torchvision.transforms.ColorJitter(brightness=0.5, contrast=0.5)
-    # ], p=0.8),
+        # Convert to tensor before custom tensor transforms
+        torchvision.transforms.ToTensor(),
 
-    # Convert to tensor before custom tensor transforms
-    torchvision.transforms.ToTensor(),
+        # Added: Custom tensor-based transforms
+        RandomSolarize(threshold=0.5, p=0.3),
+        RandomGaussianNoise(mean=0.0, std=0.05, p=0.3),
+        RandomIntensityAdjust(factor_range=(0.7, 1.3), p=0.5),
+    ])
 
-    # Added: Custom tensor-based transforms
-    RandomSolarize(threshold=0.5, p=0.3),
-    RandomGaussianNoise(mean=0.0, std=0.05, p=0.3),
-    RandomIntensityAdjust(factor_range=(0.7, 1.3), p=0.5),
-])
-
-transform = MultiViewTransform(transforms=[view_transform, view_transform])
-dataset_train = SimCLRDataset(cell_type=EXPERIMENT, exp_ids=EXP_IDS, mode="train", transform=transform)
-dataloader_train = DataLoader(dataset_train, batch_size=16, shuffle=True, drop_last=True, num_workers=4)
+    return MultiViewTransform(transforms=[view_transform, view_transform])
 
 
-#backbone = torchvision.models.resnet34()
-backbone = FFResNet50()
-backbone.fc = torch.nn.Identity()
+def create_backbone(backbone_name):
+    if backbone_name == 'resnet34':
+        backbone = FFResNet34()
+    else:  # default to resnet50
+        backbone = FFResNet50()
 
-# Build the SimCLR model.
-model = SimCLR(backbone)
-criterion = lightlyloss.NTXentLoss(temperature=0.1)
-optimizer = torch.optim.AdamW(model.parameters(), 0.001)#, eps=1e-05)
-scheduler = StepLRWarmup(optimizer, T_max=EPOCH,  gamma=0.5, T_warmup=0)
-#scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH,  T_warmup=5)
-scaler = torch.cuda.amp.GradScaler(init_scale=2**14,)
+    backbone.fc = torch.nn.Identity()
+    return backbone
 
-writer = SummaryWriter(log_dir=f"pretrain/runs/{LOG_DIR}")
-trainer = Trainer(dataloader_train, model, optimizer, scheduler, scaler, criterion, device='cuda', save_path=SAVE_PATH, writer=writer, epochs=EPOCH)
-trainer.train()
-writer.close()
+
+def main():
+    args = parse_args()
+
+    # Get fold configuration
+    fold_config = FOLD_CONFIGS[args.fold]
+    train_exp_ids = fold_config['train']
+    val_exp_ids = fold_config['val']
+
+    print(f"Using fold {args.fold}:")
+    print(f"  Train experiments: {train_exp_ids}")
+    print(f"  Validation experiments: {val_exp_ids}")
+
+    # Create directory paths and names
+    exp_name = f"{args.experiment}_fold{args.fold}"
+    log_dir = f"{args.log_dir}/{exp_name}_{args.epochs}"
+    save_path = f"{args.save_dir}/{args.experiment}/fold{args.fold}_{args.epochs}"
+
+    # Ensure save directory exists
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
+    # Compute dataset statistics
+    ds_dataset = MyoblastDataset(cell_type=args.experiment, exp_ids=train_exp_ids, mode="cropped", transform=None)
+    mean, std = compute_mean_std(ds_dataset)
+    print(f"Dataset mean: {mean}, std: {std}")
+
+    # Create transforms and dataset
+    transform = get_transform()
+    dataset_train = SimCLRDataset(
+        cell_type=args.experiment,
+        exp_ids=train_exp_ids,
+        mode="train",
+        transform=transform
+    )
+
+    dataloader_train = DataLoader(
+        dataset_train,
+        batch_size=args.batch_size,
+        shuffle=True,
+        drop_last=True,
+        num_workers=args.num_workers
+    )
+
+    # Create model and training components
+    backbone = create_backbone(args.backbone)
+    model = SimCLR(backbone)
+
+    criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
+    optimizer = torch.optim.AdamW(model.parameters(), args.lr)
+    scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
+    scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 14)
+
+    # Set up tensorboard and trainer
+    writer = SummaryWriter(log_dir=log_dir)
+
+    trainer = Trainer(
+        dataloader_train,
+        model,
+        optimizer,
+        scheduler,
+        scaler,
+        criterion,
+        device='cuda',
+        save_path=save_path,
+        writer=writer,
+        epochs=args.epochs
+    )
+
+    # Train the model
+    trainer.train()
+    writer.close()
+
+
+if __name__ == "__main__":
+    main()
