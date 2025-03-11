@@ -1,6 +1,7 @@
 import torch
 from pathlib import Path
 from tqdm import tqdm
+import torch.nn.functional as F
 
 class Trainer():
     def __init__(self, train_loader, model, optimizer, scheduler, scaler, loss_fn,
@@ -76,7 +77,7 @@ class Trainer():
                 if self.supervised:
                     # Stack embeddings from both views
                     # Reshape to [batch_size, n_views, feature_dim]
-                    features = torch.cat([z0.unsqueeze(1), z1.unsqueeze(1)], dim=1)
+                    features = F.normalize(torch.cat([z0.unsqueeze(1), z1.unsqueeze(1)], dim=1), dim=1)
                     loss_batch = self.loss_function(features, labels) / accumulation_steps
                 else:
                     # Original SimCLR loss
