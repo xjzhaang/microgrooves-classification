@@ -112,14 +112,16 @@ NUM_CLASSES = len(weights_tensorv)
 
 ### TRAIN MULTI-CLASS USING CONTRASTIVE WEIGHTS
 
-backbone = FFResNet34()
+backbone = FFResNet50()
 backbone.fc = torch.nn.Identity()
-backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
-pretrained_ssl = SimCLR(backbone)
+pretrained_ssl = SimCLR(
+    backbone,
+    input_dim=2048, 
+    hidden_dim=2048,
+    output_dim=128
+)
 
-# Load the pretrained weights
-ssl_save_path = SAVE_PATH.replace("experiments", "pretrain").replace("100", "200")
-checkpoint = torch.load(Path(ssl_save_path) / "best_loss.pth", map_location="cuda")
+checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/resnet50-no-solarize/{EXP_IDS}_200/best_loss.pth", map_location="cuda")
 pretrained_ssl.load_state_dict(checkpoint['model'])
 
 # Extract just the backbone from the SimCLR model
@@ -128,10 +130,10 @@ print("SSL model loaded!")
 
 model.fc = torch.nn.Sequential(
     torch.nn.Dropout(p=0.2), 
-    torch.nn.Linear(in_features=512, out_features=NUM_CLASSES, bias=True)
+    torch.nn.Linear(in_features=2048, out_features=NUM_CLASSES, bias=True)
 )
 
-unfreeze_after = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'layer3', 'ff_parser_3',]# 'ff_parser_4', 'ff_parser_5',] # Add your layer names here
+unfreeze_after = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'layer3', 'ff_parser_3', 'ff_parser_4',]#'layer4' 'ff_parser_5',] # Add your layer names here
 
 freeze = True
 for name, param in model.named_parameters():

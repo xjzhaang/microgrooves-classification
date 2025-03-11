@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 class Trainer():
     def __init__(self, train_loader, model, optimizer, scheduler, scaler, loss_fn,
-                 device, save_path, writer, epochs):
+                 device, save_path, writer, epochs, supervised=False):
         self.dataloader_train = train_loader
         self.model = model.to(device)
         self.device = device
@@ -18,6 +18,7 @@ class Trainer():
         self.scaler = scaler
         self.save_path = save_path
         self.best_loss = 999
+        self.supervised = supervised
 
         if (Path(self.save_path) / "model.pth").exists():
             # Load the checkpoint files
@@ -71,7 +72,15 @@ class Trainer():
             with torch.cuda.amp.autocast():
                 z0 = self.model(view0)
                 z1 = self.model(view1)
-                loss_batch = self.loss_function(z0, z1) / accumulation_steps
+                
+                if self.supervised:
+                    # Stack embeddings from both views
+                    # Reshape to [batch_size, n_views, feature_dim]
+                    features = torch.cat([z0.unsqueeze(1), z1.unsqueeze(1)], dim=1)
+                    loss_batch = self.loss_function(features, labels) / accumulation_steps
+                else:
+                    # Original SimCLR loss
+                    loss_batch = self.loss_function(z0, z1) / accumulation_steps
 
             self.scaler.scale(loss_batch).backward()
             loss += loss_batch.item() * accumulation_steps  # Adjust for reporting actual loss

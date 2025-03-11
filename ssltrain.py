@@ -18,6 +18,9 @@ from src.resnets import FFResNet50, FFResNet34
 from src_contrastive.dataset_contrastive import SimCLRDataset
 from src_contrastive.model_contrastive import SimCLR
 from src_contrastive.trainer_contrastive import Trainer
+from src_contrastive.losses import SupConLoss
+
+
 
 
 def parse_args():
@@ -34,9 +37,11 @@ def parse_args():
                         help='Learning rate')
     parser.add_argument('--temperature', type=float, default=0.1,
                         help='Temperature parameter for NTXentLoss')
+    parser.add_argument('--supervised', type=bool, default=False,
+                        help='Supervised contrastive learning')
 
     # Fold selection
-    parser.add_argument('--fold', type=int, default=1, choices=[1, 2, 3],
+    parser.add_argument('--fold', type=int, default=1, choices=[1, 2],
                         help='Fold number for train/val split (1, 2, or 3)')
 
     # Model selection
@@ -64,10 +69,6 @@ FOLD_CONFIGS = {
         'train': [240221, 240219, 240731, 240802],
         'val': [240215, 240805, 240807]
     },
-    3: {
-        'train': [240215, 240221, 240731, 240807],
-        'val': [240219, 240802, 240805]
-    }
 }
 
 
@@ -166,14 +167,15 @@ def main():
     train_exp_ids = fold_config['train']
     val_exp_ids = fold_config['val']
 
-    print(f"Using fold {args.fold}:")
+    print(f"Using fold {FOLD_CONFIGS[args.fold]}:")
     print(f"  Train experiments: {train_exp_ids}")
     print(f"  Validation experiments: {val_exp_ids}")
 
     # Create directory paths and names
-    exp_name = f"{args.experiment}_fold{args.fold}"
+    exp_name = f"{args.experiment}"
     log_dir = f"{args.log_dir}/{exp_name}_{args.epochs}"
-    save_path = f"{args.save_dir}/{args.experiment}/fold{args.fold}_{args.epochs}"
+    fold_name = FOLD_CONFIGS[args.fold]["train"]
+    save_path = f"{args.save_dir}/{args.experiment}/{fold_name}_{args.epochs}"
 
     # Ensure save directory exists
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
@@ -204,7 +206,8 @@ def main():
     backbone = create_backbone(args.backbone)
     model = SimCLR(backbone)
 
-    criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
+    #criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
+    criterion = SupConLoss(temperature=args.temperature)
     optimizer = torch.optim.AdamW(model.parameters(), args.lr)
     scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
     scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 14)
@@ -222,7 +225,8 @@ def main():
         device='cuda',
         save_path=save_path,
         writer=writer,
-        epochs=args.epochs
+        epochs=args.epochs,
+        supervised=args.supervised,
     )
 
     # Train the model
