@@ -66,9 +66,9 @@ class Trainer():
         self.model.train()
         self.optimizer.zero_grad()
         progress_bar = tqdm(enumerate(self.dataloader_train), total=len(self.dataloader_train),
-                            desc=f"Epoch #{self.epochs_run}")
+                            desc=f"Epoch #{self.epochs_run}", ascii=True)
         for batch, data in progress_bar:
-            view0, view1 = data["image"][0].to(self.device), data["image"][1].to(self.device)
+            view0, view1, labels = data["image"][0].to(self.device), data["image"][1].to(self.device), data["label"].to(self.device)
             with torch.cuda.amp.autocast():
                 z0 = self.model(view0)
                 z1 = self.model(view1)
