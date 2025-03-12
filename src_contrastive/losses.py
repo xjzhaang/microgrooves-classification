@@ -3,9 +3,10 @@ Author: Yonglong Tian (yonglong@mit.edu)
 Date: May 07, 2020
 """
 from __future__ import print_function
-
 import torch
 import torch.nn as nn
+import torch.distributed.nn
+import torch.nn.functional as F
 
 
 class SupConLoss(nn.Module):
@@ -86,7 +87,7 @@ class SupConLoss(nn.Module):
 
         # compute log_prob
         exp_logits = torch.exp(logits) * logits_mask
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
+        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True) + 1e-12)
 
         # compute mean of log-likelihood over positive
         # modified to handle edge cases when there is no positive pair

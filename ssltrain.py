@@ -9,7 +9,7 @@ from lightly.transforms.multi_view_transform import MultiViewTransform
 
 from src.dataset import MyoblastDataset
 from src.utils import compute_mean_std
-from src.optimizers import StepLRWarmup
+from src.optimizers import StepLRWarmup, CosineAnnealingLRWarmup
 from torch.utils.tensorboard import SummaryWriter
 from torchvision.transforms import InterpolationMode
 import random
@@ -31,7 +31,7 @@ def parse_args():
                         help='Experiment name')
     parser.add_argument('--epochs', type=int, default=200,
                         help='Number of training epochs')
-    parser.add_argument('--batch_size', type=int, default=16,
+    parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training')
     parser.add_argument('--lr', type=float, default=0.001,
                         help='Learning rate')
@@ -53,7 +53,7 @@ def parse_args():
                         help='Directory for tensorboard logs')
     parser.add_argument('--save_dir', type=str, default='pretrain',
                         help='Directory to save models')
-    parser.add_argument('--num_workers', type=int, default=4,
+    parser.add_argument('--num_workers', type=int, default=1,
                         help='Number of data loading workers')
 
     return parser.parse_args()
@@ -173,8 +173,8 @@ def main():
 
     # Create directory paths and names
     exp_name = f"{args.experiment}"
-    log_dir = f"{args.log_dir}/{exp_name}_{args.epochs}"
     fold_name = FOLD_CONFIGS[args.fold]["train"]
+    log_dir = f"{args.log_dir}/{exp_name}_{fold_name}_{args.epochs}"
     save_path = f"{args.save_dir}/{args.experiment}/{fold_name}_{args.epochs}"
 
     # Ensure save directory exists
@@ -204,14 +204,22 @@ def main():
 
     # Create model and training components
     backbone = create_backbone(args.backbone)
-    model = SimCLR(backbone)
-
-    #criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
-    criterion = SupConLoss(temperature=args.temperature)
+    model = SimCLR(backbone, 512, 512, 128)
+    
+    if args.supervised:
+        criterion = SupConLoss(temperature=args.temperature)
+    else:
+        criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
     optimizer = torch.optim.AdamW(model.parameters(), args.lr)
-    scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
-    scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 14)
-
+    #scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
+    scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5)
+    #scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 14)
+    scaler = torch.cuda.amp.GradScaler(
+        init_scale=2**10,  # Start with a smaller scale factor (default is 2^16)
+        growth_factor=1.5,  # Grow the scale more slowly (default is 2)
+        backoff_factor=0.5,  # Reduce scale more gradually when NaNs occur
+        growth_interval=100  # Update less frequently (default is 2000
+        )
     # Set up tensorboard and trainer
     writer = SummaryWriter(log_dir=log_dir)
 

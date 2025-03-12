@@ -62,7 +62,7 @@ class Trainer():
             )
             torch.save(state, Path(self.save_path) / "model.pth")
 
-    def train_step(self, accumulation_steps=16):
+    def train_step(self, accumulation_steps=32):
         loss = 0
         self.model.train()
         self.optimizer.zero_grad()
@@ -70,12 +70,11 @@ class Trainer():
                             desc=f"Epoch #{self.epochs_run}", ascii=True)
         for batch, data in progress_bar:
             view0, view1, labels = data["image"][0].to(self.device), data["image"][1].to(self.device), data["label"].to(self.device)
-            with torch.cuda.amp.autocast():
+            with torch.cuda.amp.autocast(enabled=True):
                 z0 = self.model(view0)
                 z1 = self.model(view1)
                 
                 if self.supervised:
-                    # Stack embeddings from both views
                     # Reshape to [batch_size, n_views, feature_dim]
                     features = F.normalize(torch.cat([z0.unsqueeze(1), z1.unsqueeze(1)], dim=1), dim=1)
                     loss_batch = self.loss_function(features, labels) / accumulation_steps
@@ -84,9 +83,15 @@ class Trainer():
                     loss_batch = self.loss_function(z0, z1) / accumulation_steps
 
             self.scaler.scale(loss_batch).backward()
+
+            for name, param in self.model.named_parameters():
+                if param.grad is not None and torch.isnan(param.grad).any():
+                    print(f"NaN gradient found in {name} at batch {batch}")
+                    
             loss += loss_batch.item() * accumulation_steps  # Adjust for reporting actual loss
             if (batch + 1) % accumulation_steps == 0:
                 self.scaler.step(self.optimizer)
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)  # Clip gradients
                 self.scaler.update()
                 self.optimizer.zero_grad()
 

@@ -97,7 +97,7 @@ class Trainer():
             self.model.load_state_dict(checkpoint['model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.scheduler.load_state_dict(checkpoint['scheduler'])
-            self.epochs_run = checkpoint['epochs_run']
+            self.epochs_run = 51 #checkpoint['epochs_run']
             self.scaler.load_state_dict(checkpoint['scaler'])
             self.best_loss = checkpoint['loss']
             self.best_f1 = checkpoint['f1']
