@@ -62,7 +62,7 @@ class Trainer():
             )
             torch.save(state, Path(self.save_path) / "model.pth")
 
-    def train_step(self, accumulation_steps=32):
+    def train_step(self, accumulation_steps=8):
         loss = 0
         self.model.train()
         self.optimizer.zero_grad()
@@ -84,16 +84,32 @@ class Trainer():
 
             self.scaler.scale(loss_batch).backward()
 
+            grad_stats = {}
             for name, param in self.model.named_parameters():
-                if param.grad is not None and torch.isnan(param.grad).any():
-                    print(f"NaN gradient found in {name} at batch {batch}")
+                if param.grad is not None:
+                    if torch.isnan(param.grad).any():
+                        print(f"NaN gradient found in {name} at batch {batch}")
+                        # Print parameter statistics to help identify issues
+                        print(f"  Parameter stats - min: {param.min().item()}, max: {param.max().item()}, "
+                              f"mean: {param.mean().item()}, std: {param.std().item()}")
+                    else:
+                        # Collect gradient statistics
+                        grad_norm = torch.norm(param.grad).item()
+                        grad_stats[name] = grad_norm
+            
+            if batch % 10 == 0:  # Only print occasionally to avoid clutter
+                largest_grads = sorted(grad_stats.items(), key=lambda x: x[1], reverse=True)[:5]
+                print("Largest gradient norms:")
+                for name, norm in largest_grads:
+                    print(f"  {name}: {norm}")
                     
             loss += loss_batch.item() * accumulation_steps  # Adjust for reporting actual loss
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=10.0)  # Clip gradients
             if (batch + 1) % accumulation_steps == 0:
                 self.scaler.step(self.optimizer)
-                torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)  # Clip gradients
                 self.scaler.update()
                 self.optimizer.zero_grad()
+
 
             lr = self.scheduler.get_last_lr()[0]
 

@@ -126,7 +126,7 @@ class ConfigurableBottleneck(nn.Module):
         self.conv3 = nn.Conv2d(width, out_channels, kernel_size=1, bias=False)
         self.bn3 = NormalizationLayer.get_norm_layer(norm_type, out_channels)
         
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.LeakyReLU(inplace=True)
         self.downsample = downsample
 
     def forward(self, x):
@@ -158,7 +158,7 @@ class FFResNet50(nn.Module):
         self.initial = torch.nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
             NormalizationLayer.get_norm_layer(norm_type, 64),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),)
         
         # FF-Parser after initial layer
@@ -242,7 +242,7 @@ class ConfigurableBasicBlock(nn.Module):
         self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
         self.bn2 = NormalizationLayer.get_norm_layer(norm_type, out_channels)
         
-        self.relu = nn.ReLU(inplace=True)
+        self.relu = nn.LeakyReLU(inplace=True)
         self.downsample = downsample
 
     def forward(self, x):
@@ -270,7 +270,7 @@ class FFResNet34(nn.Module):
         self.initial = torch.nn.Sequential(
             nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3, bias=False),
             NormalizationLayer.get_norm_layer(norm_type, 64),
-            nn.ReLU(inplace=True),
+            nn.LeakyReLU(inplace=True),
             nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
         )
         

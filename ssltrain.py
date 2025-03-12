@@ -1,5 +1,6 @@
 import torch
 import torchvision
+import torch.nn as nn
 from lightly import loss as lightlyloss
 import argparse
 import os
@@ -37,8 +38,8 @@ def parse_args():
                         help='Learning rate')
     parser.add_argument('--temperature', type=float, default=0.1,
                         help='Temperature parameter for NTXentLoss')
-    parser.add_argument('--supervised', type=bool, default=False,
-                        help='Supervised contrastive learning')
+    parser.add_argument('--supervised', type=lambda x: x.lower() == 'true', default=False, 
+                    help='Whether to use supervised contrastive loss')
 
     # Fold selection
     parser.add_argument('--fold', type=int, default=1, choices=[1, 2],
@@ -148,6 +149,38 @@ def get_transform():
 
     return MultiViewTransform(transforms=[view_transform, view_transform])
 
+# def init_ffresnet_weights(model):
+#     # Initialize convolutional layers
+#     for m in model.modules():
+#         if isinstance(m, nn.Conv2d):
+#             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
+#             if m.bias is not None:
+#                 nn.init.constant_(m.bias, 0)
+#         elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d)):
+#             nn.init.constant_(m.weight, 1)
+#             nn.init.constant_(m.bias, 0.01)  # Small positive bias for stability
+#         elif isinstance(m, nn.Linear):
+#             nn.init.xavier_uniform_(m.weight)
+#             if m.bias is not None:
+#                 nn.init.constant_(m.bias, 0)
+    
+#     # Special initialization for FFParser modules
+#     for name, module in model.named_children():
+#         if 'ff_parser' in name:
+#             # Initialize FFParser specific parameters
+#             # Adjust this based on your FFParser implementation
+#             for subname, submodule in module.named_modules():
+#                 if isinstance(submodule, nn.Conv2d):
+#                     # For frequency domain processing, sometimes smaller weights help
+#                     nn.init.normal_(submodule.weight, mean=0.0, std=0.01)
+#                     if submodule.bias is not None:
+#                         nn.init.constant_(submodule.bias, 0)
+    
+#     # Special initialization for the first layer (working with raw images)
+#     if hasattr(model, 'initial') and len(list(model.initial.children())) > 0:
+#         if isinstance(model.initial[0], nn.Conv2d):
+#             nn.init.kaiming_normal_(model.initial[0].weight, mode='fan_out', nonlinearity='leaky_relu')
+        
 
 def create_backbone(backbone_name):
     if backbone_name == 'resnet34':
@@ -156,6 +189,7 @@ def create_backbone(backbone_name):
         backbone = FFResNet50()
 
     backbone.fc = torch.nn.Identity()
+    #init_ffresnet_weights(backbone)
     return backbone
 
 
@@ -202,7 +236,7 @@ def main():
         num_workers=args.num_workers
     )
 
-    # Create model and training components
+
     backbone = create_backbone(args.backbone)
     model = SimCLR(backbone, 512, 512, 128)
     
@@ -210,15 +244,17 @@ def main():
         criterion = SupConLoss(temperature=args.temperature)
     else:
         criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
-    optimizer = torch.optim.AdamW(model.parameters(), args.lr)
-    #scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
-    scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5)
-    #scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 14)
+        
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
+    #scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5)
+    #scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 16)
     scaler = torch.cuda.amp.GradScaler(
         init_scale=2**10,  # Start with a smaller scale factor (default is 2^16)
         growth_factor=1.5,  # Grow the scale more slowly (default is 2)
         backoff_factor=0.5,  # Reduce scale more gradually when NaNs occur
-        growth_interval=100  # Update less frequently (default is 2000
+        growth_interval=2000  # Update less frequently (default is 2000
         )
     # Set up tensorboard and trainer
     writer = SummaryWriter(log_dir=log_dir)
