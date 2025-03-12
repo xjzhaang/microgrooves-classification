@@ -19,7 +19,7 @@ class SupConLoss(nn.Module):
         self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         
-    @torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
+    #@torch.cuda.amp.custom_fwd(cast_inputs=torch.float32)
     def forward(self, features, labels=None, mask=None):
         """Compute loss for model. If both `labels` and `mask` are None,
         it degenerates to SimCLR unsupervised loss:

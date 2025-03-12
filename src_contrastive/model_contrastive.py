@@ -21,3 +21,20 @@ class SimCLR(torch.nn.Module):
         features = self.backbone(x).flatten(start_dim=1)
         z = self.projection_head(features)
         return z
+
+
+class VICReg(torch.nn.Module):
+    def __init__(self, backbone):
+        super().__init__()
+        self.backbone = backbone
+        self.projection_head = heads.VICRegProjectionHead(
+            input_dim=512,
+            hidden_dim=2048,
+            output_dim=2048,
+            num_layers=2,
+        )
+
+    def forward(self, x):
+        x = self.backbone(x).flatten(start_dim=1)
+        z = self.projection_head(x)
+        return z

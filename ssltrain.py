@@ -17,7 +17,7 @@ import random
 
 from src.resnets import FFResNet50, FFResNet34
 from src_contrastive.dataset_contrastive import SimCLRDataset
-from src_contrastive.model_contrastive import SimCLR
+from src_contrastive.model_contrastive import SimCLR, VICReg
 from src_contrastive.trainer_contrastive import Trainer
 from src_contrastive.losses import SupConLoss
 
@@ -30,6 +30,8 @@ def parse_args():
     # Training parameters
     parser.add_argument('--experiment', type=str, default='laminac_fibroblast_scaled',
                         help='Experiment name')
+    parser.add_argument('--model', type=str, default='simclr', choices=['simclr', 'vicreg'],
+                        help='model to use')
     parser.add_argument('--epochs', type=int, default=200,
                         help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=32,
@@ -238,17 +240,24 @@ def main():
 
 
     backbone = create_backbone(args.backbone)
-    model = SimCLR(backbone, 512, 512, 128)
+
+    if args.model == "simclr":
+        model = SimCLR(backbone, 512, 512, 128)
+    elif args.model == "vicreg":
+        model = VICReg(backbone)
     
     if args.supervised:
         criterion = SupConLoss(temperature=args.temperature)
     else:
-        criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
-        
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    #optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
-    scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
-    #scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5)
+        if args.model == "simclr":
+            criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
+        elif args.model == "vicreg":
+            criterion = lightlyloss.VICRegLoss()
+            
+    #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    #scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
+    scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5, min_lr=0.001)
     #scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 16)
     scaler = torch.cuda.amp.GradScaler(
         init_scale=2**10,  # Start with a smaller scale factor (default is 2^16)
