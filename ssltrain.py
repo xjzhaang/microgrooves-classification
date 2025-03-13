@@ -244,8 +244,14 @@ def main():
     if args.model == "simclr":
         model = SimCLR(backbone, 512, 512, 128)
     elif args.model == "vicreg":
-        model = VICReg(backbone)
-    
+        if args.backbone == "resnet34":
+            model = VICReg(backbone)
+        elif args.backbone == "resnet50":
+            model = VICReg(backbone, input_dim = 2048,
+                                    hidden_dim = 4096,
+                                    output_dim = 4096,
+                                    num_layers = 2,)
+
     if args.supervised:
         criterion = SupConLoss(temperature=args.temperature)
     else:

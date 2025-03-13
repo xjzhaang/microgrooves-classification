@@ -10,7 +10,7 @@ from src.dataset import MyoblastDataset
 from src.utils import create_transforms, compute_mean_std
 from src.model_trainer import Trainer
 from src.utils import set_deterministic_mode
-from src_contrastive.model_contrastive import SimCLR
+from src_contrastive.model_contrastive import SimCLR, VICReg
 from datetime import datetime
 current_time = datetime.now().strftime("%Y-%m-%d_%H-%M")
 import fnmatch
@@ -25,8 +25,8 @@ EPOCH=100
 
 EXP_IDS = [240215, 240219, 240805, 240807,] 
 EXP_IDS_VAL = [240221, 240731, 240802]
-# EXP_IDS = [240221, 240219, 240731, 240802] 
-# EXP_IDS_VAL = [240215, 240805, 240807]
+EXP_IDS = [240221, 240219, 240731, 240802] 
+EXP_IDS_VAL = [240215, 240805, 240807]
 # FOLD1 = [240215, 240805, ] 
 # FOLD2 = [240219, 240802,240807]
 # FOLD3 = [240221, 240731]
@@ -112,16 +112,17 @@ NUM_CLASSES = len(weights_tensorv)
 
 ### TRAIN MULTI-CLASS USING CONTRASTIVE WEIGHTS
 
-backbone = FFResNet50()
+backbone = FFResNet34()
 backbone.fc = torch.nn.Identity()
-pretrained_ssl = SimCLR(
-    backbone,
-    input_dim=2048, 
-    hidden_dim=2048,
-    output_dim=128
-)
+pretrained_ssl = VICReg(backbone)
+# pretrained_ssl = SimCLR(
+#     backbone,
+#     input_dim=2048, 
+#     hidden_dim=2048,
+#     output_dim=128
+# )
 
-checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/resnet50-no-solarize/{EXP_IDS}_200/best_loss.pth", map_location="cuda")
+checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/vicreg-resnet34/{EXP_IDS}_300/best_loss.pth", map_location="cuda")
 pretrained_ssl.load_state_dict(checkpoint['model'])
 
 # Extract just the backbone from the SimCLR model
@@ -129,11 +130,11 @@ model = pretrained_ssl.backbone
 print("SSL model loaded!")
 
 model.fc = torch.nn.Sequential(
-    torch.nn.Dropout(p=0.2), 
-    torch.nn.Linear(in_features=2048, out_features=NUM_CLASSES, bias=True)
+    #torch.nn.Dropout(p=0.2), 
+    torch.nn.Linear(in_features=512, out_features=NUM_CLASSES, bias=True)
 )
 
-unfreeze_after = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'layer3', 'ff_parser_3', 'ff_parser_4',]#'layer4' 'ff_parser_5',] # Add your layer names here
+unfreeze_after = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'layer3', 'ff_parser_3', 'ff_parser_4','layer4' 'ff_parser_5',] # Add your layer names here
 
 freeze = True
 for name, param in model.named_parameters():

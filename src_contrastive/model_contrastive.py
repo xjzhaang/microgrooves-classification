@@ -24,14 +24,21 @@ class SimCLR(torch.nn.Module):
 
 
 class VICReg(torch.nn.Module):
-    def __init__(self, backbone):
+    def __init__(
+            self,
+            backbone,
+            input_dim=512,  # Default for ResNet50 (512 for ResNet18/34)
+            hidden_dim=2048,
+            output_dim=2048,
+            num_layers = 2,
+    ):
         super().__init__()
         self.backbone = backbone
         self.projection_head = heads.VICRegProjectionHead(
-            input_dim=512,
-            hidden_dim=2048,
-            output_dim=2048,
-            num_layers=2,
+            input_dim=input_dim,
+            hidden_dim=hidden_dim,
+            output_dim=output_dim,
+            num_layers=num_layers,
         )
 
     def forward(self, x):
