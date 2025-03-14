@@ -144,7 +144,6 @@ def get_transform():
         torchvision.transforms.ToTensor(),
 
         # Added: Custom tensor-based transforms
-        RandomSolarize(threshold=0.5, p=0.3),
         RandomGaussianNoise(mean=0.0, std=0.05, p=0.3),
         RandomIntensityAdjust(factor_range=(0.7, 1.3), p=0.5),
     ])
@@ -217,9 +216,6 @@ def main():
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     # Compute dataset statistics
-    ds_dataset = MyoblastDataset(cell_type=args.experiment, exp_ids=train_exp_ids, mode="cropped", transform=None)
-    mean, std = compute_mean_std(ds_dataset)
-    print(f"Dataset mean: {mean}, std: {std}")
 
     # Create transforms and dataset
     transform = get_transform()

@@ -25,8 +25,8 @@ EPOCH=100
 
 EXP_IDS = [240215, 240219, 240805, 240807,] 
 EXP_IDS_VAL = [240221, 240731, 240802]
-EXP_IDS = [240221, 240219, 240731, 240802] 
-EXP_IDS_VAL = [240215, 240805, 240807]
+# EXP_IDS = [240221, 240219, 240731, 240802] 
+# EXP_IDS_VAL = [240215, 240805, 240807]
 # FOLD1 = [240215, 240805, ] 
 # FOLD2 = [240219, 240802,240807]
 # FOLD3 = [240221, 240731]
@@ -152,7 +152,7 @@ for name, param in model.named_parameters():
 
         
 
-optimizer = torch.optim.AdamW(model.parameters(), 0.001)#, eps=1e-05)
+optimizer = torch.optim.AdamW(model.parameters(), 0.0001)#, eps=1e-05)
 scheduler = StepLRWarmup(optimizer, T_max=EPOCH,  gamma=0.5, T_warmup=0)
 #scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH,  T_warmup=0)
 scaler = torch.cuda.amp.GradScaler(init_scale=2**14,)
