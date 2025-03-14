@@ -242,7 +242,10 @@ def main():
     backbone = create_backbone(args.backbone)
 
     if args.model == "simclr":
-        model = SimCLR(backbone, 512, 512, 128)
+        if args.backbone == "resnet34":
+            model = SimCLR(backbone, 512, 512, 128)
+        elif args.backbone == "resnet50":
+            model = SimCLR(backbone, 2048, 2048, 128)
     elif args.model == "vicreg":
         if args.backbone == "resnet34":
             model = VICReg(backbone)
