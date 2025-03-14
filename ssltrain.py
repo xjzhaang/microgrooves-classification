@@ -20,6 +20,7 @@ from src_contrastive.dataset_contrastive import SimCLRDataset
 from src_contrastive.model_contrastive import SimCLR, VICReg
 from src_contrastive.trainer_contrastive import Trainer
 from src_contrastive.losses import SupConLoss
+from src_contrastive.transforms_contrastive import RandomGaussianNoise, RandomIntensityAdjust, RandomFrequencyMasking
 
 
 
@@ -73,49 +74,7 @@ FOLD_CONFIGS = {
         'val': [240215, 240805, 240807]
     },
 }
-
-
-class RandomSolarize(torch.nn.Module):
-    def __init__(self, threshold=0.5, p=0.3):
-        super().__init__()
-        self.threshold = threshold
-        self.p = p
-
-    def forward(self, img):
-        if random.random() < self.p:
-            return torch.where(img >= self.threshold, 1.0 - img, img)
-        return img
-
-
-# Custom Gaussian noise transform
-class RandomGaussianNoise(torch.nn.Module):
-    def __init__(self, mean=0.0, std=0.1, p=0.3):
-        super().__init__()
-        self.mean = mean
-        self.std = std
-        self.p = p
-
-    def forward(self, img):
-        if random.random() < self.p:
-            noise = torch.randn_like(img) * self.std + self.mean
-            return torch.clamp(img + noise, 0, 1)
-        return img
-
-
-# Custom intensity adjustment transform
-class RandomIntensityAdjust(torch.nn.Module):
-    def __init__(self, factor_range=(0.7, 1.3), p=0.5):
-        super().__init__()
-        self.factor_range = factor_range
-        self.p = p
-
-    def forward(self, img):
-        if random.random() < self.p:
-            factor = random.uniform(*self.factor_range)
-            return torch.clamp(img * factor, 0, 1)
-        return img
-
-
+        
 def get_transform():
     # Expanded transform pipeline
     view_transform = torchvision.transforms.Compose([
@@ -125,7 +84,7 @@ def get_transform():
         torchvision.transforms.RandomResizedCrop(size=512, scale=(0.8, 1.0)),
         torchvision.transforms.RandomHorizontalFlip(p=0.7),
         torchvision.transforms.RandomVerticalFlip(p=0.7),
-        torchvision.transforms.RandomRotation((-180, 180), interpolation=InterpolationMode.BILINEAR, expand=False,
+        torchvision.transforms.RandomRotation(180, interpolation=InterpolationMode.BILINEAR, expand=False,
                                               center=None, fill=0),
 
         # Added: Random affine for subtle distortions
@@ -146,41 +105,10 @@ def get_transform():
         # Added: Custom tensor-based transforms
         RandomGaussianNoise(mean=0.0, std=0.05, p=0.3),
         RandomIntensityAdjust(factor_range=(0.7, 1.3), p=0.5),
+        RandomFrequencyMasking(min_threshold=0.8, max_threshold=0.9999,p=0.3),
     ])
 
     return MultiViewTransform(transforms=[view_transform, view_transform])
-
-# def init_ffresnet_weights(model):
-#     # Initialize convolutional layers
-#     for m in model.modules():
-#         if isinstance(m, nn.Conv2d):
-#             nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='leaky_relu')
-#             if m.bias is not None:
-#                 nn.init.constant_(m.bias, 0)
-#         elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm, nn.InstanceNorm2d)):
-#             nn.init.constant_(m.weight, 1)
-#             nn.init.constant_(m.bias, 0.01)  # Small positive bias for stability
-#         elif isinstance(m, nn.Linear):
-#             nn.init.xavier_uniform_(m.weight)
-#             if m.bias is not None:
-#                 nn.init.constant_(m.bias, 0)
-    
-#     # Special initialization for FFParser modules
-#     for name, module in model.named_children():
-#         if 'ff_parser' in name:
-#             # Initialize FFParser specific parameters
-#             # Adjust this based on your FFParser implementation
-#             for subname, submodule in module.named_modules():
-#                 if isinstance(submodule, nn.Conv2d):
-#                     # For frequency domain processing, sometimes smaller weights help
-#                     nn.init.normal_(submodule.weight, mean=0.0, std=0.01)
-#                     if submodule.bias is not None:
-#                         nn.init.constant_(submodule.bias, 0)
-    
-#     # Special initialization for the first layer (working with raw images)
-#     if hasattr(model, 'initial') and len(list(model.initial.children())) > 0:
-#         if isinstance(model.initial[0], nn.Conv2d):
-#             nn.init.kaiming_normal_(model.initial[0].weight, mode='fan_out', nonlinearity='leaky_relu')
         
 
 def create_backbone(backbone_name):
