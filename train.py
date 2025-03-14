@@ -50,12 +50,12 @@ SAVE_PATH = f"experiments/{EXPERIMENT}/{EXP_IDS}_{EPOCH}"
 train_transforms, val_transforms, test_transforms = create_transforms(mean, std)
 train_dataset = MyoblastDataset(cell_type=EXPERIMENT, exp_ids=EXP_IDS, mode="train", transform=train_transforms)
 val_dataset = MyoblastDataset(cell_type=EXPERIMENT, exp_ids=EXP_IDS, mode="val_exp", transform=val_transforms)
-train_loader = ThreadDataLoader(train_dataset, num_workers=2, batch_size=16, shuffle=True)
+train_loader = ThreadDataLoader(train_dataset, num_workers=4, batch_size=16, shuffle=True)
 
 def worker_init_fn(worker_id):
     set_deterministic_mode(42 + worker_id)
     
-val_loader = ThreadDataLoader(val_dataset, num_workers=2, batch_size=1, shuffle=False, worker_init_fn=worker_init_fn)
+val_loader = ThreadDataLoader(val_dataset, num_workers=4, batch_size=1, shuffle=False, worker_init_fn=worker_init_fn)
 
 
 def compute_class_weights(train_loader):
@@ -112,17 +112,18 @@ NUM_CLASSES = len(weights_tensorv)
 
 ### TRAIN MULTI-CLASS USING CONTRASTIVE WEIGHTS
 
-backbone = FFResNet34()
+backbone = FFResNet50()
+#backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 backbone.fc = torch.nn.Identity()
-pretrained_ssl = VICReg(backbone)
-# pretrained_ssl = SimCLR(
-#     backbone,
-#     input_dim=2048, 
-#     hidden_dim=2048,
-#     output_dim=128
-# )
+#pretrained_ssl = VICReg(backbone)
+pretrained_ssl = SimCLR(
+    backbone,
+    # input_dim=512, 
+    # hidden_dim=512,
+    # output_dim=128
+)
 
-checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/vicreg-resnet34/{EXP_IDS}_300/best_loss.pth", map_location="cuda")
+checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/supcontrast/res50/{EXP_IDS}_300/best_loss.pth", map_location="cuda")
 pretrained_ssl.load_state_dict(checkpoint['model'])
 
 # Extract just the backbone from the SimCLR model
@@ -130,25 +131,30 @@ model = pretrained_ssl.backbone
 print("SSL model loaded!")
 
 model.fc = torch.nn.Sequential(
-    #torch.nn.Dropout(p=0.2), 
-    torch.nn.Linear(in_features=512, out_features=NUM_CLASSES, bias=True)
+    torch.nn.Dropout(p=0.2), 
+    torch.nn.Linear(in_features=2048, out_features=NUM_CLASSES, bias=True)
 )
 
-unfreeze_after = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'layer3', 'ff_parser_3', 'ff_parser_4','layer4' 'ff_parser_5',] # Add your layer names here
+freeze_layers = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'ff_parser_3',
+                ]#'layer3', ]# 'ff_parser_4', 'layer4', 'ff_parser_5']
 
-freeze = True
 for name, param in model.named_parameters():
-    # Check if current layer name starts with any of the specified names
-    should_unfreeze = any(name.startswith(layer) for layer in unfreeze_after)
-    if should_unfreeze:
-        freeze = False
-    param.requires_grad = not freeze
+    # Default state is to enable gradients (unfreeze)
+    param.requires_grad = True
+    
+    # If the parameter belongs to a layer we want to freeze, disable gradients
+    should_freeze = any(name.startswith(layer) for layer in freeze_layers)
+    if should_freeze:
+        param.requires_grad = False
+        print(f"Freezing: {name}")
+    else:
+        print(f"Training: {name}")
 
         
 
-optimizer = torch.optim.AdamW(model.parameters(), 0.0001)#, eps=1e-05)
+optimizer = torch.optim.AdamW(model.parameters(), 0.001)#, eps=1e-05)
 scheduler = StepLRWarmup(optimizer, T_max=EPOCH,  gamma=0.5, T_warmup=0)
-#scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH,  T_warmup=5)
+#scheduler = CosineAnnealingLRWarmup(optimizer, T_max=EPOCH,  T_warmup=0)
 scaler = torch.cuda.amp.GradScaler(init_scale=2**14,)
 
 writer = SummaryWriter(log_dir=f"runs/{LOG_DIR}")

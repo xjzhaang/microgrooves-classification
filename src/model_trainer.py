@@ -97,7 +97,7 @@ class Trainer():
             self.model.load_state_dict(checkpoint['model'])
             self.optimizer.load_state_dict(checkpoint['optimizer'])
             self.scheduler.load_state_dict(checkpoint['scheduler'])
-            self.epochs_run = 51 #checkpoint['epochs_run']
+            self.epochs_run = checkpoint['epochs_run']
             self.scaler.load_state_dict(checkpoint['scaler'])
             self.best_loss = checkpoint['loss']
             self.best_f1 = checkpoint['f1']
@@ -178,7 +178,25 @@ class Trainer():
                 loss_batch = self.loss_function(y_pred, y)# + 0.01 * self.saliency_loss(saliency, mask)
                 #saliency_loss_track+=0.01 * self.saliency_loss(saliency, mask)
 
-               
+            grad_stats = {}
+            for name, param in self.model.named_parameters():
+                if param.grad is not None:
+                    if torch.isnan(param.grad).any():
+                        print(f"NaN gradient found in {name} at batch {batch}")
+                        # Print parameter statistics to help identify issues
+                        print(f"  Parameter stats - min: {param.min().item()}, max: {param.max().item()}, "
+                              f"mean: {param.mean().item()}, std: {param.std().item()}")
+                    else:
+                        # Collect gradient statistics
+                        grad_norm = torch.norm(param.grad).item()
+                        grad_stats[name] = grad_norm
+            
+            if batch % 30 == 0:  # Only print occasionally to avoid clutter
+                largest_grads = sorted(grad_stats.items(), key=lambda x: x[1], reverse=True)[:5]
+                print("Largest gradient norms:")
+                for name, norm in largest_grads:
+                    print(f"  {name}: {norm}")
+                    
             self.optimizer.zero_grad()
             self.scaler.scale(loss_batch).backward()
             self.scaler.step(self.optimizer)

@@ -57,6 +57,7 @@ class SimCLRDataset(Dataset):
             id_class_df = id_class_df.astype(str)
             id_class_df['strat'] = id_class_df['Exp ID'] + id_class_df['class']
             train_ids, val_ids = train_test_split(id_class_df, test_size=0.3, random_state=42, stratify=id_class_df["strat"])
+
             
             if self.mode == "train":
                 self.data = self.data[self.data['original ID'].isin(train_ids['original ID'])]

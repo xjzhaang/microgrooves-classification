@@ -73,7 +73,7 @@ class MyoblastDataset(Dataset):
 
 
         if self.mode == "train" or self.mode == "val_exp" or self.mode == "val_original" or self.mode == "test_original":
-            train_ids, test_val_ids = train_test_split(id_class_df, test_size=0.30, random_state=24, stratify=id_class_df["strat"])
+            train_ids, test_val_ids = train_test_split(id_class_df, test_size=0.30, random_state=42, stratify=id_class_df["strat"])
         #test_ids, val_ids = train_test_split(test_val_ids, test_size=0.5, random_state=42, stratify=test_val_ids["strat"])
         
         if self.mode == "train":

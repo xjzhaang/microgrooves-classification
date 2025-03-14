@@ -136,9 +136,9 @@ def get_transform():
         ], p=0.3),
 
         # Modified: Apply Gaussian blur randomly instead of always
-        torchvision.transforms.RandomApply([
-            torchvision.transforms.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))
-        ], p=0.5),
+        # torchvision.transforms.RandomApply([
+        #     torchvision.transforms.GaussianBlur(kernel_size=21, sigma=(0.1, 2.0))
+        # ], p=0.5),
 
         # Convert to tensor before custom tensor transforms
         torchvision.transforms.ToTensor(),
@@ -210,8 +210,8 @@ def main():
     # Create directory paths and names
     exp_name = f"{args.experiment}"
     fold_name = FOLD_CONFIGS[args.fold]["train"]
-    log_dir = f"{args.log_dir}/{exp_name}_{fold_name}_{args.epochs}"
-    save_path = f"{args.save_dir}/{args.experiment}/{fold_name}_{args.epochs}"
+    log_dir = f"{args.log_dir}/{exp_name}_{fold_name}_{args.epochs}_{args.backbone + args.model}"
+    save_path = f"{args.save_dir}/{args.experiment}/{fold_name}_{args.epochs}_{args.backbone + args.model}"
 
     # Ensure save directory exists
     os.makedirs(os.path.dirname(save_path), exist_ok=True)

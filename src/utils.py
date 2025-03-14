@@ -91,11 +91,11 @@ def create_transforms(mean, std):
             #     prob=0.3,
             #     offsets=0.1,
             # ),
-            RandAdjustContrastd(
-                keys=["image"],
-                prob=0.4,
-                gamma=(1.7, 2.4),
-            ),
+            # RandAdjustContrastd(
+            #     keys=["image"],
+            #     prob=0.4,
+            #     gamma=(1.7, 2.4),
+            # ),
             # NormalizeIntensityd(
             #     keys=["image"],
             #     # subtrahend=mean,

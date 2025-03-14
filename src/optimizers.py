@@ -16,7 +16,7 @@ def cosine_decay_warmup(iteration, warmup_iterations, total_iterations, min_fact
     Returns:
         lr multiplier between min_factor and 1.0
     """
-    if iteration <= warmup_iterations:
+    if  warmup_iterations > 0 and iteration <= warmup_iterations:
         # Linear warmup phase
         multiplier = iteration / warmup_iterations
     else:
