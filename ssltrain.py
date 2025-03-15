@@ -37,9 +37,9 @@ def parse_args():
                         help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training')
-    parser.add_argument('--lr', type=float, default=0.001,
+    parser.add_argument('--lr', type=float, default=0.1,
                         help='Learning rate')
-    parser.add_argument('--temperature', type=float, default=0.1,
+    parser.add_argument('--temperature', type=float, default=0.07,
                         help='Temperature parameter for NTXentLoss')
     parser.add_argument('--supervised', type=lambda x: x.lower() == 'true', default=False, 
                     help='Whether to use supervised contrastive loss')

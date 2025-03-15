@@ -1,3 +1,6 @@
+import torch
+import random
+
 class RandomSolarize(torch.nn.Module):
     def __init__(self, threshold=0.5, p=0.3):
         super().__init__()
