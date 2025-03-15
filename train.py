@@ -112,18 +112,18 @@ NUM_CLASSES = len(weights_tensorv)
 
 ### TRAIN MULTI-CLASS USING CONTRASTIVE WEIGHTS
 
-backbone = FFResNet34()
-backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
+backbone = FFResNet50()
+#backbone.conv1 = torch.nn.Conv2d(1, 64, kernel_size=(7, 7), stride=(2, 2), padding=(3, 3), bias=False)
 backbone.fc = torch.nn.Identity()
 #pretrained_ssl = VICReg(backbone)
 pretrained_ssl = SimCLR(
     backbone,
-    input_dim=512, 
-    hidden_dim=512,
-    output_dim=128
+    # input_dim=512, 
+    # hidden_dim=512,
+    # output_dim=128
 )
 
-checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/resnet34/{EXP_IDS}_200/best_loss.pth", map_location="cuda")
+checkpoint = torch.load(f"./pretrain/{EXPERIMENT}/resnet50/{EXP_IDS}_200/best_loss.pth", map_location="cuda")
 pretrained_ssl.load_state_dict(checkpoint['model'])
 
 # Extract just the backbone from the SimCLR model
@@ -132,10 +132,10 @@ print("SSL model loaded!")
 
 model.fc = torch.nn.Sequential(
     torch.nn.Dropout(p=0.2), 
-    torch.nn.Linear(in_features=512, out_features=128, bias=True),
+    torch.nn.Linear(in_features=2048, out_features=512, bias=True),
     torch.nn.LeakyReLU(), 
     torch.nn.Dropout(p=0.1),
-    torch.nn.Linear(in_features=128, out_features=NUM_CLASSES)
+    torch.nn.Linear(in_features=512, out_features=NUM_CLASSES)
 )
 
 freeze_layers = ['initial', 'conv1', 'layer1', 'ff_parser_1', 'layer2', 'ff_parser_2', 'ff_parser_3',

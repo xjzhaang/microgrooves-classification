@@ -37,7 +37,7 @@ def parse_args():
                         help='Number of training epochs')
     parser.add_argument('--batch_size', type=int, default=32,
                         help='Batch size for training')
-    parser.add_argument('--lr', type=float, default=0.1,
+    parser.add_argument('--lr', type=float, default=0.001,
                         help='Learning rate')
     parser.add_argument('--temperature', type=float, default=0.07,
                         help='Temperature parameter for NTXentLoss')
@@ -140,7 +140,7 @@ def main():
     log_dir = f"{args.log_dir}/{exp_name}_{fold_name}_{args.epochs}_{args.backbone + args.model}"
     save_path = f"{args.save_dir}/{args.experiment}/{fold_name}_{args.epochs}_{args.backbone + args.model}"
 
-    # Ensure save directory exists
+    # Ensure save directory existsdoes
     os.makedirs(os.path.dirname(save_path), exist_ok=True)
 
     # Compute dataset statistics
@@ -184,13 +184,14 @@ def main():
     else:
         if args.model == "simclr":
             criterion = lightlyloss.NTXentLoss(temperature=args.temperature)
+            print("Using NTXentLoss!")
         elif args.model == "vicreg":
             criterion = lightlyloss.VICRegLoss()
             
-    #optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-    optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
-    #scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
-    scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5, min_lr=0.001)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    #optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=1e-4)
+    scheduler = StepLRWarmup(optimizer, T_max=args.epochs, gamma=0.5, T_warmup=0)
+    #scheduler = CosineAnnealingLRWarmup(optimizer, T_max=args.epochs,  T_warmup=5, min_lr=0.001)
     #scaler = torch.cuda.amp.GradScaler(init_scale=2 ** 16)
     scaler = torch.cuda.amp.GradScaler(
         init_scale=2**10,  # Start with a smaller scale factor (default is 2^16)
